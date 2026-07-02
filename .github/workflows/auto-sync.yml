@@ -27,9 +27,15 @@ jobs:
       - name: 运行爬虫获取最新数据
         run: python crawler.py
 
-      - name: 部署到 GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist
-          publish_branch: gh-pages
+      - name: 同步网页到 docs 文件夹
+        run: |
+          cp -f dist/index.html docs/index.html
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/index.html
+          if git diff --cached --quiet; then
+            echo "没有变化，跳过提交"
+          else
+            git commit -m "auto: 同步最新更新数据 $(date +'%Y-%m-%d %H:%M')"
+            git push
+          fi
