@@ -39,4 +39,4 @@ jobs:
           path: './dist'
 
       - name: 部署到 GitHub Pages
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v2
