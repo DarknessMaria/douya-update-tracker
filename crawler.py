@@ -148,7 +148,7 @@ def generate_html(updates):
     min_interval = min(intervals_only) if intervals_only else 0
     max_interval = max(intervals_only) if intervals_only else 0
     
-    # 生成明细列表HTML - 倒序排列（最新在前）
+    # 生成明细列表HTML - 倒序排列（最新在前），带data-idx正确对应数据
     list_html = ""
     
     # 先添加"至今"条目（最上面）
@@ -156,19 +156,25 @@ def generate_html(updates):
     list_html += f'''
         <div class="update-item now-item">
             <span class="update-date">{today_str}（今天）</span>
-            <span class="update-interval">已等待 <span class="waiting">{days_since} 天</span></span>
+            <span class="update-content summary">等待下次更新...</span>
+            <span class="update-interval"><span class="waiting">{days_since} 天</span></span>
         </div>'''
     
-    # 倒序遍历更新记录
+    # 倒序遍历更新记录，data-idx=原始索引
     for i in range(len(updates) - 1, -1, -1):
         u = updates[i]
         if i == 0:
-            interval_str = '<span style="color:#999;">首次更新</span>'
+            interval_str = '<span style="color:#999;">首次</span>'
         else:
             interval_str = f'<span class="days">{u["interval"]} 天</span>'
+        # 取前两条内容作为摘要
+        summary = u["items"][0][:20] + "..." if len(u["items"][0]) > 20 else u["items"][0]
+        if len(u["items"]) > 1:
+            summary += f" 等{len(u['items'])}条"
         list_html += f'''
-            <div class="update-item">
+            <div class="update-item" data-idx="{i}">
                 <span class="update-date">{u["date"]}</span>
+                <span class="update-content summary">{summary}</span>
                 <span class="update-interval">{interval_str}</span>
             </div>'''
     
@@ -278,23 +284,41 @@ def generate_html(updates):
             border-bottom: 1px solid #eee;
         }}
         .update-item {{
-            display: flex;
-            justify-content: space-between;
+            display: grid;
+            grid-template-columns: 90px 1fr 55px;
             align-items: center;
-            padding: 6px 10px;
+            padding: 7px 10px;
             border-bottom: 1px solid #f0f0f0;
             font-size: 14px;
             line-height: 1.4;
+            gap: 8px;
+            cursor: pointer;
+            transition: background 0.15s;
         }}
+        .update-item:hover {{ background: #f8f9ff; }}
         .update-item:last-child {{ border-bottom: none; }}
         .update-item.now-item {{
             background: #fff8f8;
             border-radius: 8px;
             margin-bottom: 4px;
             border-bottom: 2px solid #ffe0e0;
+            cursor: default;
         }}
-        .update-date {{ font-weight: 600; color: #2c3e50; }}
-        .update-interval {{ color: #666; font-size: 13px; margin-left: auto; padding-left: 16px; text-align: right; min-width: 70px; }}
+        .update-item.now-item:hover {{ background: #fff8f8; }}
+        .update-date {{ font-weight: 600; color: #2c3e50; font-size: 13px; }}
+        .update-content.summary {{
+            color: #888;
+            font-size: 12px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }}
+        .update-interval {{
+            color: #666;
+            font-size: 13px;
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }}
         .update-interval .days {{ font-weight: 600; color: #667eea; }}
         .update-interval .waiting {{
             font-weight: 600;
@@ -449,35 +473,36 @@ def generate_html(updates):
         updateToday();
         setInterval(updateToday, 60000);
 
-        // 渲染更新详情
-        const listContainer = document.getElementById("updateList");
-        const updateItems = listContainer.querySelectorAll(".update-item");
-        
-        // 为历史更新条目添加详情展开
-        for (let i = 0; i < updates.length; i++) {{
-            const item = updateItems[i];
-            if (!item || !updates[i].items || updates[i].items.length === 0) continue;
+        // 渲染更新详情 - 通过data-idx正确对应数据（不受倒序影响）
+        document.querySelectorAll('.update-item[data-idx]').forEach(item => {{
+            const idx = parseInt(item.dataset.idx);
+            const data = updates[idx];
+            if (!data || !data.items || data.items.length === 0) return;
             
             const detailDiv = document.createElement("div");
             detailDiv.className = "detail-content";
+            detailDiv.style.cssText = "display:none; margin-top:6px; padding:8px 12px; background:#f8f9fa; border-radius:6px; font-size:13px; color:#666; line-height:1.6; grid-column:1/-1;";
             const ol = document.createElement("ol");
-            updates[i].items.forEach(content => {{
+            ol.style.cssText = "margin:0; padding-left:18px;";
+            data.items.forEach(content => {{
                 const li = document.createElement("li");
+                li.style.cssText = "margin:2px 0;";
                 li.textContent = content;
                 ol.appendChild(li);
             }});
             detailDiv.appendChild(ol);
             item.appendChild(detailDiv);
             
-            // 点击展开/收起
-            item.style.cursor = "pointer";
-            item.querySelector(".update-date").innerHTML += ' <span style="color:#667eea;font-size:11px;">▼</span>';
+            // 箭头放在内容列
+            const contentSpan = item.querySelector(".update-content");
+            contentSpan.innerHTML += ' <span class="arrow" style="color:#667eea;font-size:10px;">▼</span>';
+            
             item.addEventListener("click", function() {{
-                detailDiv.classList.toggle("active");
-                const arrow = item.querySelector(".update-date span");
-                arrow.textContent = detailDiv.classList.contains("active") ? "▲" : "▼";
+                detailDiv.style.display = detailDiv.style.display === "none" ? "block" : "none";
+                const arrow = item.querySelector(".update-content .arrow");
+                arrow.textContent = detailDiv.style.display === "none" ? "▼" : "▲";
             }});
-        }}
+        }});
 
         // 绘制折线图
         const ctx = document.getElementById("intervalChart").getContext("2d");
