@@ -8,12 +8,6 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
-
-concurrency:
-  group: "pages"
-  cancel-in-progress: false
 
 jobs:
   sync-and-deploy:
@@ -33,10 +27,9 @@ jobs:
       - name: 运行爬虫获取最新数据
         run: python crawler.py
 
-      - name: 上传 GitHub Pages 产物
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: './dist'
-
       - name: 部署到 GitHub Pages
-        uses: actions/deploy-pages@v2
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          publish_branch: gh-pages
