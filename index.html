@@ -100,13 +100,20 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 10px 0;
+            padding: 6px 10px;
             border-bottom: 1px solid #f0f0f0;
             font-size: 14px;
+            line-height: 1.4;
         }
         .update-item:last-child { border-bottom: none; }
-        .update-date { font-weight: 600; color: #2c3e50; min-width: 120px; }
-        .update-interval { color: #666; font-size: 13px; }
+        .update-item.now-item {
+            background: #fff8f8;
+            border-radius: 8px;
+            margin-bottom: 4px;
+            border-bottom: 2px solid #ffe0e0;
+        }
+        .update-date { font-weight: 600; color: #2c3e50; }
+        .update-interval { color: #666; font-size: 13px; margin-left: auto; padding-left: 16px; text-align: right; min-width: 70px; }
         .update-interval .days { font-weight: 600; color: #667eea; }
         .update-interval .waiting {
             font-weight: 600;
@@ -171,7 +178,7 @@
 
         <div class="sync-info">
             <span>数据自动同步于 </span>
-            <span class="last-sync">2026-07-02 12:55</span>
+            <span class="last-sync">2026-07-02 13:00</span>
             <span> · 每12小时自动抓取语雀最新数据</span>
         </div>
 
@@ -213,66 +220,66 @@
         <div class="update-list">
             <h3>更新记录明细（点击日期查看详情）</h3>
             <div id="updateList">
+        <div class="update-item now-item">
+            <span class="update-date">2026-07-02（今天）</span>
+            <span class="update-interval">已等待 <span class="waiting">5 天</span></span>
+        </div>
             <div class="update-item">
-                <span class="update-date">2026-05-09</span>
-                <span class="update-interval"><span style="color:#999;">首次更新</span></span>
-            </div>
-            <div class="update-item">
-                <span class="update-date">2026-05-10</span>
-                <span class="update-interval">间隔 <span class="days">1 天</span></span>
-            </div>
-            <div class="update-item">
-                <span class="update-date">2026-05-11</span>
-                <span class="update-interval">间隔 <span class="days">1 天</span></span>
-            </div>
-            <div class="update-item">
-                <span class="update-date">2026-05-13</span>
-                <span class="update-interval">间隔 <span class="days">2 天</span></span>
-            </div>
-            <div class="update-item">
-                <span class="update-date">2026-05-15</span>
-                <span class="update-interval">间隔 <span class="days">2 天</span></span>
-            </div>
-            <div class="update-item">
-                <span class="update-date">2026-05-19</span>
-                <span class="update-interval">间隔 <span class="days">4 天</span></span>
-            </div>
-            <div class="update-item">
-                <span class="update-date">2026-05-22</span>
-                <span class="update-interval">间隔 <span class="days">3 天</span></span>
-            </div>
-            <div class="update-item">
-                <span class="update-date">2026-05-27</span>
-                <span class="update-interval">间隔 <span class="days">5 天</span></span>
-            </div>
-            <div class="update-item">
-                <span class="update-date">2026-06-04</span>
-                <span class="update-interval">间隔 <span class="days">8 天</span></span>
-            </div>
-            <div class="update-item">
-                <span class="update-date">2026-06-07</span>
-                <span class="update-interval">间隔 <span class="days">3 天</span></span>
-            </div>
-            <div class="update-item">
-                <span class="update-date">2026-06-14</span>
-                <span class="update-interval">间隔 <span class="days">7 天</span></span>
-            </div>
-            <div class="update-item">
-                <span class="update-date">2026-06-17</span>
-                <span class="update-interval">间隔 <span class="days">3 天</span></span>
+                <span class="update-date">2026-06-27</span>
+                <span class="update-interval"><span class="days">4 天</span></span>
             </div>
             <div class="update-item">
                 <span class="update-date">2026-06-23</span>
-                <span class="update-interval">间隔 <span class="days">6 天</span></span>
+                <span class="update-interval"><span class="days">6 天</span></span>
             </div>
             <div class="update-item">
-                <span class="update-date">2026-06-27</span>
-                <span class="update-interval">间隔 <span class="days">4 天</span></span>
+                <span class="update-date">2026-06-17</span>
+                <span class="update-interval"><span class="days">3 天</span></span>
             </div>
-        <div class="update-item" style="background:#fff8f8;margin:0 -10px;padding:10px;border-radius:8px;">
-            <span class="update-date">2026-07-02（今天）</span>
-            <span class="update-interval">已等待 <span class="waiting">5 天</span></span>
-        </div></div>
+            <div class="update-item">
+                <span class="update-date">2026-06-14</span>
+                <span class="update-interval"><span class="days">7 天</span></span>
+            </div>
+            <div class="update-item">
+                <span class="update-date">2026-06-07</span>
+                <span class="update-interval"><span class="days">3 天</span></span>
+            </div>
+            <div class="update-item">
+                <span class="update-date">2026-06-04</span>
+                <span class="update-interval"><span class="days">8 天</span></span>
+            </div>
+            <div class="update-item">
+                <span class="update-date">2026-05-27</span>
+                <span class="update-interval"><span class="days">5 天</span></span>
+            </div>
+            <div class="update-item">
+                <span class="update-date">2026-05-22</span>
+                <span class="update-interval"><span class="days">3 天</span></span>
+            </div>
+            <div class="update-item">
+                <span class="update-date">2026-05-19</span>
+                <span class="update-interval"><span class="days">4 天</span></span>
+            </div>
+            <div class="update-item">
+                <span class="update-date">2026-05-15</span>
+                <span class="update-interval"><span class="days">2 天</span></span>
+            </div>
+            <div class="update-item">
+                <span class="update-date">2026-05-13</span>
+                <span class="update-interval"><span class="days">2 天</span></span>
+            </div>
+            <div class="update-item">
+                <span class="update-date">2026-05-11</span>
+                <span class="update-interval"><span class="days">1 天</span></span>
+            </div>
+            <div class="update-item">
+                <span class="update-date">2026-05-10</span>
+                <span class="update-interval"><span class="days">1 天</span></span>
+            </div>
+            <div class="update-item">
+                <span class="update-date">2026-05-09</span>
+                <span class="update-interval"><span style="color:#999;">首次更新</span></span>
+            </div></div>
         </div>
 
         <div class="footer">
@@ -282,7 +289,7 @@
 
     <script>
         const updates = [{"date": "2026-05-09", "items": ["封印商店上架封印卡100张道具", "修复传承坐骑道具说明错误", "传承佣兵技能耗魔降低50%", "宠物市场传送员增加传送点", "特殊仓库增加可存放物品", "家园宠物鉴定费用降低为8万魔币"], "interval": null}, {"date": "2026-05-10", "items": ["修复山贼盗贼破坏狂无法封印", "技能守护领域设置为守护神得意技", "家园宠物采集制作工费降低为30", "宠物家园增加家园仓库功能", "取消家园宠物背包金币", "修复小石像怪宠物蛋问题"], "interval": 1}, {"date": "2026-05-11", "items": ["钓鱼产出几率增加", "特殊仓库取消采集材料放入", "所有佣兵宠物属性更新", "特殊仓库调整位置至最下方", "家园工作部署页面增加详情", "家园宠物放生页面增加技能详情", "精品商店增加售卖高级助手"], "interval": 1}, {"date": "2026-05-13", "items": ["打开宠物蛋时自动刷新忠诚度", "修复宝藏猎人技能寻觅问题", "灵魂封印卡更改为单局可封印多个", "家园宠物鉴定出现10级技能概率增加"], "interval": 2}, {"date": "2026-05-15", "items": ["家园宠物鉴定10级技能概率增加", "获取家园卡增加兑换功能", "黑白钥匙起司任务取消职业限制", "失落的文明系列任务取消职业限制", "宠物回收皮肤增加", "宠物丢地消失时间更改为24小时", "特殊仓库增加可存放物品"], "interval": 2}, {"date": "2026-05-19", "items": ["任务狮鹫兽捕捉修改", "神兽传送掉落率提高", "树精神兽双王增加佣兵之证掉落", "每日任务找寻物品调整", "特殊仓库增加可存储物品", "流星山丘黄金树精任务取消职业限制", "任务凤凰的羽毛修改"], "interval": 4}, {"date": "2026-05-22", "items": ["狩猎采集增加螃蟹选项", "佣兵巫师和咒术修正技能显示", "部分任务采集统一修改为1级挖掘", "任务索奇亚古文明调查修改", "特殊仓库增加可存放任务物品", "修复守护领域4技能异常", "道具豆芽宝石开放使用", "法兰城竞技场连战增加首饰掉落"], "interval": 3}, {"date": "2026-05-27", "items": ["修复佣兵奥义复活之光可选中死亡玩家", "特殊仓库增加可存放道具", "每日任务取消寻找装备", "在线答题增加周三晚上八点开启"], "interval": 5}, {"date": "2026-06-04", "items": ["宠物寄售管理页面调整", "宠物摆摊续期价格降低", "修复野外任务采集点无效", "添加道具聚魔100可存放特殊仓库", "狮鹫捕捉任务孵化时间降低"], "interval": 8}, {"date": "2026-06-07", "items": ["宠物皮卡丘更改为固定血攻档位", "增加地狱看门犬和迷你龙Lv1级点位", "人物宠物佣兵物理输出技能增加20%伤害", "黑白钥匙起司任务等待时间降低", "修复法兰竞技场地狱连战问题", "任务七宗罪修改", "家园宠物寿命归0不再直接删除", "家园宠物制作委托可设置数量", "砸蛋显示时间缩短", "砸蛋增加奖品", "娱乐大厅增加NPC银行职员"], "interval": 3}, {"date": "2026-06-14", "items": ["再生花园香草药剂使用时间降低", "特殊仓库允许在娱乐大厅内使用", "娱乐大厅增加NPC万能收购", "道具砂糖800袋取消确认选项", "特殊仓库允许存放道具", "追月得意技修改为剑士职业", "任务半山3阿鲁卡那斯的蛋孵化时间降低", "世界BOSS神兽传说合成系统重制"], "interval": 7}, {"date": "2026-06-17", "items": ["开启端午节活动", "杂货商店上架道具磁石定位仪", "无尽神器增加查看已献祭道具列表功能"], "interval": 3}, {"date": "2026-06-23", "items": ["修复茱萸木采集无效", "人物宠物佣兵物理输出技能伤害提高至30%", "功能NPC道具管理增加回收砸蛋称号", "竞技场10连新增4把武器掉落", "神兽武器新增弓杖回力小刀", "关闭端午礼包限购NPC"], "interval": 6}, {"date": "2026-06-27", "items": ["奥义技能支持守护神职业学习", "增加奥义技能必须要转生才可以学习", "树精长老神兽双王传送凭证掉率增加5%", "取消阿尔戈斯任务2贝亚掉落魔族之角", "法兰竞技场10连和砸蛋活动增加低概率获取魔族之角", "进阶区域任务勇闯恶魔城获得宠物蛋几率调整", "武器神兽小刀增加精神属性"], "interval": 4}];
-        const chartLabels = ["05-09 ~ 05-10", "05-10 ~ 05-11", "05-11 ~ 05-13", "05-13 ~ 05-15", "05-15 ~ 05-19", "05-19 ~ 05-22", "05-22 ~ 05-27", "05-27 ~ 06-04", "06-04 ~ 06-07", "06-07 ~ 06-14", "06-14 ~ 06-17", "06-17 ~ 06-23", "06-23 ~ 06-27", "06-27 ~ 今天"];
+        const chartLabels = ["05-10", "05-11", "05-13", "05-15", "05-19", "05-22", "05-27", "06-04", "06-07", "06-14", "06-17", "06-23", "06-27", "07-02"];
         const chartData = [1, 1, 2, 2, 4, 3, 5, 8, 3, 7, 3, 6, 4, 5];
         const chartColors = ["#667eea", "#667eea", "#667eea", "#667eea", "#667eea", "#667eea", "#667eea", "#667eea", "#667eea", "#667eea", "#667eea", "#667eea", "#667eea", "#e74c3c"];
         const chartSizes = [6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 8];

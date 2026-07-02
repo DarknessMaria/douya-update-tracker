@@ -118,16 +118,16 @@ def generate_html(updates):
     """生成最终的 HTML 文件"""
     updates = calculate_intervals(updates)
     
-    # 准备图表数据
+    # 准备图表数据 - X轴只显示目标日期
     chart_labels = []
     chart_data = []
     chart_colors = []
     chart_sizes = []
     
     for i in range(1, len(updates)):
-        prev = updates[i-1]["date"][5:]
+        # 只显示目标日期，如 "05-10"
         curr = updates[i]["date"][5:]
-        chart_labels.append(f"{prev} ~ {curr}")
+        chart_labels.append(curr)
         chart_data.append(updates[i]["interval"])
         chart_colors.append("#667eea")
         chart_sizes.append(6)
@@ -136,7 +136,8 @@ def generate_html(updates):
     last_date = datetime.strptime(updates[-1]["date"], "%Y-%m-%d").replace(tzinfo=CN_TZ)
     today = now_cn()
     days_since = (today - last_date).days
-    chart_labels.append(f"{updates[-1]['date'][5:]} ~ 今天")
+    today_label = today.strftime("%m-%d")
+    chart_labels.append(today_label)
     chart_data.append(days_since)
     chart_colors.append("#e74c3c")
     chart_sizes.append(8)
@@ -147,26 +148,29 @@ def generate_html(updates):
     min_interval = min(intervals_only) if intervals_only else 0
     max_interval = max(intervals_only) if intervals_only else 0
     
-    # 生成明细列表HTML
+    # 生成明细列表HTML - 倒序排列（最新在前）
     list_html = ""
-    for i, u in enumerate(updates):
+    
+    # 先添加"至今"条目（最上面）
+    today_str = today.strftime("%Y-%m-%d")
+    list_html += f'''
+        <div class="update-item now-item">
+            <span class="update-date">{today_str}（今天）</span>
+            <span class="update-interval">已等待 <span class="waiting">{days_since} 天</span></span>
+        </div>'''
+    
+    # 倒序遍历更新记录
+    for i in range(len(updates) - 1, -1, -1):
+        u = updates[i]
         if i == 0:
             interval_str = '<span style="color:#999;">首次更新</span>'
         else:
-            interval_str = f'间隔 <span class="days">{u["interval"]} 天</span>'
+            interval_str = f'<span class="days">{u["interval"]} 天</span>'
         list_html += f'''
             <div class="update-item">
                 <span class="update-date">{u["date"]}</span>
                 <span class="update-interval">{interval_str}</span>
             </div>'''
-    
-    # 添加"至今"条目
-    today_str = today.strftime("%Y-%m-%d")
-    list_html += f'''
-        <div class="update-item" style="background:#fff8f8;margin:0 -10px;padding:10px;border-radius:8px;">
-            <span class="update-date">{today_str}（今天）</span>
-            <span class="update-interval">已等待 <span class="waiting">{days_since} 天</span></span>
-        </div>'''
     
     # 构建 JSON 数据供 JS 使用
     updates_json = json.dumps(updates, ensure_ascii=False)
@@ -277,13 +281,20 @@ def generate_html(updates):
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 10px 0;
+            padding: 6px 10px;
             border-bottom: 1px solid #f0f0f0;
             font-size: 14px;
+            line-height: 1.4;
         }}
         .update-item:last-child {{ border-bottom: none; }}
-        .update-date {{ font-weight: 600; color: #2c3e50; min-width: 120px; }}
-        .update-interval {{ color: #666; font-size: 13px; }}
+        .update-item.now-item {{
+            background: #fff8f8;
+            border-radius: 8px;
+            margin-bottom: 4px;
+            border-bottom: 2px solid #ffe0e0;
+        }}
+        .update-date {{ font-weight: 600; color: #2c3e50; }}
+        .update-interval {{ color: #666; font-size: 13px; margin-left: auto; padding-left: 16px; text-align: right; min-width: 70px; }}
         .update-interval .days {{ font-weight: 600; color: #667eea; }}
         .update-interval .waiting {{
             font-weight: 600;
