@@ -5,9 +5,16 @@
 import re
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
+
+# 中国时区 (UTC+8)
+CN_TZ = timezone(timedelta(hours=8))
+
+def now_cn():
+    """获取中国时区的当前时间"""
+    return datetime.now(CN_TZ)
 
 # ========== 配置 ==========
 YUQUE_URL = "https://www.yuque.com/douyamoli/2026/wt13txo97lyeqwk0"
@@ -126,8 +133,8 @@ def generate_html(updates):
         chart_sizes.append(6)
     
     # 最后一个数据点：到今天的间隔
-    last_date = datetime.strptime(updates[-1]["date"], "%Y-%m-%d")
-    today = datetime.now()
+    last_date = datetime.strptime(updates[-1]["date"], "%Y-%m-%d").replace(tzinfo=CN_TZ)
+    today = now_cn()
     days_since = (today - last_date).days
     chart_labels.append(f"{updates[-1]['date'][5:]} ~ 今天")
     chart_data.append(days_since)
@@ -396,7 +403,16 @@ def generate_html(updates):
         const chartData = {chart_data_json};
         const chartColors = {chart_colors_json};
         const chartSizes = {chart_sizes_json};
-        const lastUpdateDate = new Date(updates[updates.length - 1].date + "T00:00:00");
+        // 中国时区 (UTC+8)
+        const CN_OFFSET = 8 * 60 * 60 * 1000;
+
+        function getCNDate(date) {{
+            // 转换为北京时间 (UTC+8)
+            const utc = date.getTime() + date.getTimezoneOffset() * 60 * 1000;
+            return new Date(utc + CN_OFFSET);
+        }}
+
+        const lastUpdateDate = getCNDate(new Date(updates[updates.length - 1].date + "T00:00:00+08:00"));
 
         function getDaysDiff(date1, date2) {{
             const d1 = new Date(date1.getFullYear(), date1.getMonth(), date1.getDate());
@@ -413,7 +429,7 @@ def generate_html(updates):
         }}
 
         function updateToday() {{
-            const now = new Date();
+            const now = getCNDate(new Date());
             document.getElementById("todayDisplay").textContent = formatDate(now);
             const daysSince = getDaysDiff(lastUpdateDate, now);
             document.getElementById("daysSinceUpdate").textContent = daysSince + " 天";
@@ -555,7 +571,7 @@ def generate_html(updates):
     print(f"  - 距上次更新已 {days_since} 天")
 
 def main():
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 开始抓取语雀数据...")
+    print(f"[{now_cn().strftime('%Y-%m-%d %H:%M:%S')}] 开始抓取语雀数据...")
     print(f"目标: {YUQUE_URL}")
     
     # 尝试抓取
