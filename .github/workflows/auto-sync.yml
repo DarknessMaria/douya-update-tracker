@@ -1,0 +1,42 @@
+name: 自动同步语雀更新记录
+
+on:
+  schedule:
+    # 每天北京时间早上8点和晚上8点各检查一次 (UTC 0点和12点)
+    - cron: '0 0,12 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  sync-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 安装依赖
+        run: pip install requests beautifulsoup4
+
+      - name: 运行爬虫获取最新数据
+        run: python crawler.py
+
+      - name: 上传 GitHub Pages 产物
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './dist'
+
+      - name: 部署到 GitHub Pages
+        uses: actions/deploy-pages@v4
