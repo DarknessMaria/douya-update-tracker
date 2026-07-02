@@ -1,0 +1,43 @@
+name: 自动同步语雀更新记录
+
+on:
+  schedule:
+    # 每天北京时间早上8点和晚上8点各检查一次 (UTC 0点和12点)
+    - cron: '0 0,12 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 安装依赖
+        run: pip install requests beautifulsoup4
+
+      - name: 运行爬虫获取最新数据
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+        run: python crawler.py
+
+      - name: 同步网页到 docs 文件夹
+        run: |
+          cp -f dist/index.html docs/index.html
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/index.html
+          if git diff --cached --quiet; then
+            echo "没有变化，跳过提交"
+          else
+            git commit -m "auto: 同步最新更新数据 $(date +'%Y-%m-%d %H:%M')"
+            git push
+          fi

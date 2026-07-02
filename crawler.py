@@ -118,6 +118,10 @@ def generate_html(updates):
     """生成最终的 HTML 文件"""
     updates = calculate_intervals(updates)
     
+    # 读取 Git commit hash（GitHub Actions 会自动注入 GITHUB_SHA）
+    git_sha = os.environ.get("GITHUB_SHA", "")
+    version = f"{git_sha[:7]}" if git_sha else "local"
+    
     # 准备图表数据 - X轴只显示目标日期
     chart_labels = []
     chart_data = []
@@ -372,6 +376,16 @@ def generate_html(updates):
             font-size: 12px;
             color: #aaa;
         }}
+        .version {{
+            display: inline-block;
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+            font-size: 11px;
+            color: #888;
+            background: #f0f0f0;
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-left: 6px;
+        }}
     </style>
 </head>
 <body>
@@ -429,6 +443,7 @@ def generate_html(updates):
 
         <div class="footer">
             数据来源：语雀 · 豆芽魔力赛季服攻略 · 维护更新记录 · 自动同步
+            <span class="version">{version}</span>
         </div>
     </div>
 
