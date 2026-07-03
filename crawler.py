@@ -7,7 +7,7 @@ import json
 import os
 from datetime import datetime, timedelta, timezone
 from urllib.request import Request, urlopen
-from urllib.error import HTTPError
+from urllib.parse import unquote
 
 # 中国时区 (UTC+8)
 CN_TZ = timezone(timedelta(hours=8))
@@ -21,8 +21,8 @@ YUQUE_URL = "https://www.yuque.com/douyamoli/2026/wt13txo97lyeqwk0"
 OUTPUT_DIR = "./dist"
 # ==========================
 
-def fetch_yuque():
-    """抓取语雀页面内容"""
+def fetch_yuque_page():
+    """抓取语雀页面HTML，提取appData"""
     try:
         req = Request(
             YUQUE_URL,
@@ -38,8 +38,79 @@ def fetch_yuque():
         print(f"[警告] 抓取语雀页面失败: {e}")
         return None
 
+def extract_doc_info(html):
+    """从页面HTML中提取book_id和doc_id"""
+    if not html:
+        return None, None
+    
+    try:
+        # 从 appData 中提取
+        m = re.search(r'window\.appData\s*=\s*JSON\.parse\(decodeURIComponent\("(.*?)"\)\)', html)
+        if m:
+            data = json.loads(unquote(m.group(1)))
+            book_id = data.get("book", {}).get("id")
+            # 从目录中找到"维护更新记录"对应的doc_id
+            target_doc_id = None
+            for item in data.get("book", {}).get("toc", []):
+                if "维护更新记录" in str(item.get("title", "")):
+                    target_doc_id = item.get("doc_id")
+                    break
+            if book_id and target_doc_id:
+                return str(book_id), str(target_doc_id)
+    except Exception as e:
+        print(f"[警告] 提取doc信息失败: {e}")
+    
+    return None, None
+
+def fetch_doc_content(book_id, doc_id):
+    """通过语雀API获取文档内容"""
+    try:
+        api_url = f"https://www.yuque.com/api/docs/{doc_id}?book_id={book_id}"
+        req = Request(api_url, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Referer": YUQUE_URL
+        })
+        with urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return data.get("data", {}).get("content", "")
+    except Exception as e:
+        print(f"[警告] API获取文档内容失败: {e}")
+        return None
+
+def extract_dates_from_lake(content):
+    """从Lake格式HTML中提取日期和更新内容"""
+    if not content:
+        return None
+    
+    updates = []
+    try:
+        # Lake格式: <strong><span style="color: #DF2A3F">2026-07-02</span></strong>
+        # 内容格式: <span>1、更新内容</span>
+        
+        # 按日期分段
+        sections = re.split(r'(?=<strong>.*?\d{4}-\d{2}-\d{2})', content)
+        
+        for section in sections:
+            date_match = re.search(r'(\d{4}-\d{2}-\d{2})', section)
+            if date_match:
+                date_str = date_match.group(1)
+                # 提取所有更新项 (1、xxx)
+                items = re.findall(r'\d+、([^<]+)', section)
+                items = [i.strip() for i in items if i.strip()]
+                # 解码HTML实体
+                items = [i.replace("&quot;", '"').replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">") for i in items]
+                if items:
+                    updates.append({"date": date_str, "items": items})
+        
+        updates.sort(key=lambda x: x["date"])
+        print(f"[调试] Lake格式提取到 {len(updates)} 条记录")
+        return updates
+    except Exception as e:
+        print(f"[警告] Lake格式解析失败: {e}")
+        return None
+
 def extract_dates_from_html(html):
-    """从HTML中提取日期和更新内容"""
+    """从纯文本HTML中提取日期和更新内容（备用方法）"""
     if not html:
         return None
     
@@ -49,40 +120,14 @@ def extract_dates_from_html(html):
     matches = re.findall(date_pattern, html)
     
     for date_str, content in matches:
-        # 提取每条更新内容
         items = re.findall(r'\d+[、．.]\s*([^\n]+)', content)
         updates.append({
             "date": date_str,
             "items": [item.strip() for item in items if item.strip()]
         })
     
-    # 按日期排序（旧到新）
     updates.sort(key=lambda x: x["date"])
     return updates
-
-def extract_dates_from_lite_reader(html):
-    """从语雀轻量阅读器API响应中提取数据"""
-    # 尝试从页面中提取 bookId 和 docId
-    book_match = re.search(r'bookId["\']?\s*[:=]\s*["\']?(\d+)', html)
-    doc_match = re.search(r'docId["\']?\s*[:=]\s*["\']?(\d+)', html)
-    
-    if book_match and doc_match:
-        book_id = book_match.group(1)
-        doc_id = doc_match.group(1)
-        lite_url = f"https://www.yuque.com/api/docs/{doc_id}?book_id={book_id}&include_contributors=true&include_hits=true&include_like=true&include_pinyin=true&include_read_count=true&include_share=true&include_user=true&merge_dynamic_contributors=true&safe_pointer=true"
-        try:
-            req = Request(lite_url, headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "Referer": YUQUE_URL
-            })
-            with urlopen(req, timeout=30) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-                content = data.get("data", {}).get("content", "")
-                return extract_dates_from_html(content)
-        except Exception as e:
-            print(f"[警告] 轻量阅读器API获取失败: {e}")
-    
-    return None
 
 def get_fallback_data():
     """获取本地兜底数据（最后一次已知的更新记录）"""
@@ -101,6 +146,7 @@ def get_fallback_data():
         {"date": "2026-06-17", "items": ["开启端午节活动", "杂货商店上架道具磁石定位仪", "无尽神器增加查看已献祭道具列表功能"]},
         {"date": "2026-06-23", "items": ["修复茱萸木采集无效", "人物宠物佣兵物理输出技能伤害提高至30%", "功能NPC道具管理增加回收砸蛋称号", "竞技场10连新增4把武器掉落", "神兽武器新增弓杖回力小刀", "关闭端午礼包限购NPC"]},
         {"date": "2026-06-27", "items": ["奥义技能支持守护神职业学习", "增加奥义技能必须要转生才可以学习", "树精长老神兽双王传送凭证掉率增加5%", "取消阿尔戈斯任务2贝亚掉落魔族之角", "法兰竞技场10连和砸蛋活动增加低概率获取魔族之角", "进阶区域任务勇闯恶魔城获得宠物蛋几率调整", "武器神兽小刀增加精神属性"]},
+        {"date": "2026-07-02", "items": ["修复\"战神铠甲\"物品栏中重叠消失的问题", "修复宠物\"暗黑僧侣\"无法捕捉的问题", "魔珠系列任务调整,取消两个步骤的物品需求", "裂空挑战合成NPC移动到法兰城\"裂空守护者\"旁边位置", "进阶区域\"豆芽商店\"中的道具\"职业存储(绑)\"价格由188降低为88豆芽币", "宝石装饰系统增加2次确认窗口,防止误触", "道具\"荣誉勋章\"耐久提高至100点", "兰国8道具\"豪华的头巾\"\"缓慢的小刀\"\"超级内裤\"耐久提高至10点", "兰国4道具\"祈祷的围巾\"取消兑换次数限制", "进阶区域\"豆芽商店\"中增加道具\"特殊仓库扩展[绑]\""]},
     ]
 
 def calculate_intervals(updates):
@@ -129,7 +175,6 @@ def generate_html(updates):
     chart_sizes = []
     
     for i in range(1, len(updates)):
-        # 只显示目标日期，如 "05-10"
         curr = updates[i]["date"][5:]
         chart_labels.append(curr)
         chart_data.append(updates[i]["interval"])
@@ -155,7 +200,6 @@ def generate_html(updates):
     # 生成明细列表HTML - 倒序排列（最新在前），带data-idx正确对应数据
     list_html = ""
     
-    # 先添加"至今"条目（最上面）
     today_str = today.strftime("%Y-%m-%d")
     list_html += f'''
         <div class="update-item now-item">
@@ -164,14 +208,12 @@ def generate_html(updates):
             <span class="update-interval"><span class="waiting">{days_since} 天</span></span>
         </div>'''
     
-    # 倒序遍历更新记录，data-idx=原始索引
     for i in range(len(updates) - 1, -1, -1):
         u = updates[i]
         if i == 0:
             interval_str = '<span style="color:#999;">首次</span>'
         else:
             interval_str = f'<span class="days">{u["interval"]} 天</span>'
-        # 取前两条内容作为摘要
         summary = u["items"][0][:20] + "..." if len(u["items"][0]) > 20 else u["items"][0]
         if len(u["items"]) > 1:
             summary += f" 等{len(u['items'])}条"
@@ -182,7 +224,6 @@ def generate_html(updates):
                 <span class="update-interval">{interval_str}</span>
             </div>'''
     
-    # 构建 JSON 数据供 JS 使用
     updates_json = json.dumps(updates, ensure_ascii=False)
     chart_labels_json = json.dumps(chart_labels, ensure_ascii=False)
     chart_data_json = json.dumps(chart_data)
@@ -625,23 +666,33 @@ def main():
     print(f"[{now_cn().strftime('%Y-%m-%d %H:%M:%S')}] 开始抓取语雀数据...")
     print(f"目标: {YUQUE_URL}")
     
-    # 尝试抓取
-    html = fetch_yuque()
     updates = None
     
+    # 方法1: 从页面提取book_id和doc_id，然后调用API获取Lake格式内容
+    print("[方法1] 尝试从语雀API获取...")
+    html = fetch_yuque_page()
     if html:
-        # 先尝试从HTML中直接提取
-        updates = extract_dates_from_html(html)
-        if not updates:
-            # 尝试轻量阅读器API
-            print("[信息] 尝试轻量阅读器API...")
-            updates = extract_dates_from_lite_reader(html)
+        book_id, doc_id = extract_doc_info(html)
+        if book_id and doc_id:
+            print(f"[调试] book_id={book_id}, doc_id={doc_id}")
+            content = fetch_doc_content(book_id, doc_id)
+            if content:
+                updates = extract_dates_from_lake(content)
+        else:
+            print("[警告] 无法从页面提取book_id和doc_id")
     
+    # 方法2: 尝试从HTML直接提取（备用）
+    if not updates and html:
+        print("[方法2] 尝试从HTML直接提取...")
+        updates = extract_dates_from_html(html)
+    
+    # 方法3: 使用本地兜底数据
     if not updates:
-        print("[警告] 抓取失败，使用本地兜底数据")
+        print("[警告] 所有抓取方法均失败，使用本地兜底数据")
         updates = get_fallback_data()
     else:
-        print(f"[成功] 从语雀抓取到 {len(updates)} 条更新记录")
+        print(f"[成功] 抓取到 {len(updates)} 条更新记录")
+        # 更新兜底数据（可选：将新数据保存到文件）
     
     # 生成网页
     generate_html(updates)
