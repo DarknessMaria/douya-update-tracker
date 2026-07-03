@@ -25,6 +25,8 @@ jobs:
         run: pip install requests beautifulsoup4
 
       - name: 运行爬虫获取最新数据
+        env:
+          GITHUB_SHA: ${{ github.sha }}
         run: python crawler.py
 
       - name: 同步网页到 docs 文件夹
