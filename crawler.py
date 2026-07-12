@@ -203,9 +203,9 @@ def generate_html(updates):
     today_str = today.strftime("%Y-%m-%d")
     list_html += f'''
         <div class="update-item now-item">
-            <span class="update-date">{today_str}（今天）</span>
+            <span class="update-date"><span id="todayListDate"></span>（今天）</span>
             <span class="update-content summary">等待下次更新...</span>
-            <span class="update-interval"><span class="waiting">{days_since} 天</span></span>
+            <span class="update-interval"><span class="waiting" id="daysSinceWaiting"></span></span>
         </div>'''
     
     for i in range(len(updates) - 1, -1, -1):
@@ -524,6 +524,15 @@ def generate_html(updates):
             document.getElementById("todayDisplay").textContent = formatDate(now);
             const daysSince = getDaysDiff(lastUpdateDate, now);
             document.getElementById("daysSinceUpdate").textContent = daysSince + " 天";
+            // 同步更新明细列表顶部的"今天"条目
+            const listDate = document.getElementById("todayListDate");
+            if (listDate) {{
+                const m = String(now.getMonth() + 1).padStart(2, "0");
+                const d = String(now.getDate()).padStart(2, "0");
+                listDate.textContent = `${{now.getFullYear()}}-${{m}}-${{d}}`;
+            }}
+            const waiting = document.getElementById("daysSinceWaiting");
+            if (waiting) waiting.textContent = daysSince + " 天";
         }}
 
         updateToday();
