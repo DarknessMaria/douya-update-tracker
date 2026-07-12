@@ -439,7 +439,7 @@ def generate_html(updates):
         <div class="sync-info">
             <span>数据自动同步于 </span>
             <span class="last-sync">{today_str} {today.strftime("%H:%M")}</span>
-            <span> · 每12小时自动抓取语雀最新数据</span>
+            <span> · 每4小时自动抓取语雀最新数据</span>
         </div>
 
         <div class="current-date">
