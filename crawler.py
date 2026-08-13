@@ -8,6 +8,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from urllib.request import Request, urlopen
 from urllib.parse import unquote
+from collections import Counter
 
 # 中国时区 (UTC+8)
 CN_TZ = timezone(timedelta(hours=8))
@@ -42,14 +43,11 @@ def extract_doc_info(html):
     """从页面HTML中提取book_id和doc_id"""
     if not html:
         return None, None
-    
     try:
-        # 从 appData 中提取
         m = re.search(r'window\.appData\s*=\s*JSON\.parse\(decodeURIComponent\("(.*?)"\)\)', html)
         if m:
             data = json.loads(unquote(m.group(1)))
             book_id = data.get("book", {}).get("id")
-            # 从目录中找到"维护更新记录"对应的doc_id
             target_doc_id = None
             for item in data.get("book", {}).get("toc", []):
                 if "维护更新记录" in str(item.get("title", "")):
@@ -59,7 +57,6 @@ def extract_doc_info(html):
                 return str(book_id), str(target_doc_id)
     except Exception as e:
         print(f"[警告] 提取doc信息失败: {e}")
-    
     return None, None
 
 def fetch_doc_content(book_id, doc_id):
@@ -77,30 +74,84 @@ def fetch_doc_content(book_id, doc_id):
         print(f"[警告] API获取文档内容失败: {e}")
         return None
 
+def classify_item(text):
+    """单条更新内容分类，返回标签列表"""
+    tags = []
+    if any(kw in text for kw in ["修复", "修正", "异常", "错误", "失效", "无效", "重叠消失", "无法", "bug", "闪退", "崩溃", "挂端"]):
+        tags.append("BUG修复")
+    
+    new_signals = [
+        "新开放", "新增", "新功能", "新道具", "新称号", "新宠物", "新任务", "新副本", "新伙伴",
+        "开放", "上架", "新上架",
+        "添加新", "添加道具", "添加物品", "添加装备",
+        "增加道具", "增加物品", "增加装备", "增加称号", "增加宠物", "增加NPC", "增加地图", "增加任务", "增加副本", "增加商城", "增加商店", "增加售卖", "增加商品", "增加皮肤", "增加坐骑", "增加礼包", "增加家园",
+    ]
+    
+    if "功能开放" in text:
+        pass
+    elif "增加" in text and "详情" in text:
+        pass
+    elif any(kw in text for kw in new_signals):
+        tags.append("新内容")
+    elif "增加" in text or "添加" in text:
+        opt_words = ["几率", "概率", "掉率", "积分", "上限", "数量", "限制", "经验", "产出", "掉落率", "消耗", "等待", "时间", "次数", "费用", "耐久", "标识", "选项", "窗口", "可存放", "价格", "费用", "上限", "下限"]
+        pattern = r'(?:增加|添加).{0,5}(?:' + '|'.join(opt_words) + r')|(?:' + '|'.join(opt_words) + r').{0,5}(?:增加|添加)'
+        if re.search(pattern, text):
+            pass
+        elif "添加至" not in text:
+            tags.append("新内容")
+    
+    if any(kw in text for kw in ["降低", "提高", "更改为", "调整", "修改", "取消", "缩短", "降低至", "提高至", "大幅度", "减少", "增加几率", "增加概率", "增加掉率", "增加积分", "增加上限", "增加数量", "增加限制", "增加经验", "增加产出", "增加掉落率", "增加产出几率", "增加消耗", "增加等待", "增加时间", "增加次数", "增加费用", "增加耐久", "增加详情", "增加标识", "增加选项", "增加窗口", "更改为", "调整", "修改", "取消", "降低", "提高", "缩短", "更改为", "降低至", "提高至", "大幅度", "增加可存放"]):
+        tags.append("优化")
+    
+    if not tags:
+        tags.append("优化")
+    return tags
+
+def classify_date(items):
+    """日期级别分类，返回标签字符串"""
+    all_tags = []
+    for item in items:
+        all_tags.extend(classify_item(item))
+    
+    counts = Counter(all_tags)
+    total = len(items)
+    
+    significant = []
+    if counts.get("BUG修复", 0) >= 1:
+        significant.append("BUG修复")
+    if counts.get("新内容", 0) >= 3 or counts.get("新内容", 0) / total >= 0.30:
+        significant.append("新内容")
+    if counts.get("优化", 0) >= 2 or counts.get("优化", 0) / total >= 0.20 or not significant:
+        significant.append("优化")
+    
+    priority = {"BUG修复": 0, "新内容": 1, "优化": 2}
+    sorted_tags = sorted(significant, key=lambda x: priority.get(x, 99))
+    return "/".join(sorted_tags[:2])
+
 def extract_dates_from_lake(content):
-    """从Lake格式HTML中提取日期和更新内容"""
+    """从Lake格式HTML中提取日期和更新内容 - 修复版：按日期标题位置切片"""
     if not content:
         return None
     
     updates = []
     try:
-        # Lake格式: <strong><span style="color: #DF2A3F">2026-07-02</span></strong>
-        # 内容格式: <span>1、更新内容</span>
+        # 修复：只匹配红色日期标题（#DF2A3F），避免条目内的蓝色<strong>被误截断
+        positions = []
+        for m in re.finditer(r'<strong>[^<]*<span[^>]*color:\s*#DF2A3F[^>]*>(\d{4}-\d{2}-\d{2})</span>[^<]*</strong>', content):
+            positions.append((m.start(), m.group(1)))
         
-        # 按日期分段
-        sections = re.split(r'(?=<strong>.*?\d{4}-\d{2}-\d{2})', content)
-        
-        for section in sections:
-            date_match = re.search(r'(\d{4}-\d{2}-\d{2})', section)
-            if date_match:
-                date_str = date_match.group(1)
-                # 提取所有更新项 (1、xxx)
-                items = re.findall(r'\d+、([^<]+)', section)
-                items = [i.strip() for i in items if i.strip()]
-                # 解码HTML实体
-                items = [i.replace("&quot;", '"').replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">") for i in items]
-                if items:
-                    updates.append({"date": date_str, "items": items})
+        for i in range(len(positions)):
+            start_pos = positions[i][0]
+            end_pos = positions[i+1][0] if i+1 < len(positions) else len(content)
+            section = content[start_pos:end_pos]
+            
+            date_str = positions[i][1]
+            items = re.findall(r'\d+、([^<]+)', section)
+            items = [i.strip() for i in items if i.strip()]
+            items = [i.replace("&quot;", '"').replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">") for i in items]
+            if items:
+                updates.append({"date": date_str, "items": items})
         
         updates.sort(key=lambda x: x["date"])
         print(f"[调试] Lake格式提取到 {len(updates)} 条记录")
@@ -113,28 +164,21 @@ def extract_dates_from_html(html):
     """从纯文本HTML中提取日期和更新内容（备用方法）"""
     if not html:
         return None
-    
     updates = []
-    # 匹配日期行：2026-06-27 格式，后面跟着更新列表
     date_pattern = r'(\d{4}-\d{2}-\d{2})\s*\n((?:\d+[、．.]\s*[^\n]+\n?)+)'
     matches = re.findall(date_pattern, html)
-    
     for date_str, content in matches:
         items = re.findall(r'\d+[、．.]\s*([^\n]+)', content)
-        updates.append({
-            "date": date_str,
-            "items": [item.strip() for item in items if item.strip()]
-        })
-    
+        updates.append({"date": date_str, "items": [item.strip() for item in items if item.strip()]})
     updates.sort(key=lambda x: x["date"])
     return updates
 
 def get_fallback_data():
-    """获取本地兜底数据（最后一次已知的更新记录）"""
+    """获取本地兜底数据（最后一次已知的完整记录）"""
     return [
         {"date": "2026-05-09", "items": ["封印商店上架封印卡100张道具", "修复传承坐骑道具说明错误", "传承佣兵技能耗魔降低50%", "宠物市场传送员增加传送点", "特殊仓库增加可存放物品", "家园宠物鉴定费用降低为8万魔币"]},
         {"date": "2026-05-10", "items": ["修复山贼盗贼破坏狂无法封印", "技能守护领域设置为守护神得意技", "家园宠物采集制作工费降低为30", "宠物家园增加家园仓库功能", "取消家园宠物背包金币", "修复小石像怪宠物蛋问题"]},
-        {"date": "2026-05-11", "items": ["钓鱼产出几率增加", "特殊仓库取消采集材料放入", "所有佣兵宠物属性更新", "特殊仓库调整位置至最下方", "家园工作部署页面增加详情", "家园宠物放生页面增加技能详情", "精品商店增加售卖高级助手"]},
+        {"date": "2026-05-11", "items": ["钓鱼产出几率增加", "特殊仓库取消采集材料放入", "所有佣兵宠物属性更新", "特殊仓库调整位置至最下方", "家园工作部署页面增加详情", "家园宠物放生页面增加技能详情", "精品商店增加售卖高级助手", "家园仓库取出物品功能开放"]},
         {"date": "2026-05-13", "items": ["打开宠物蛋时自动刷新忠诚度", "修复宝藏猎人技能寻觅问题", "灵魂封印卡更改为单局可封印多个", "家园宠物鉴定出现10级技能概率增加"]},
         {"date": "2026-05-15", "items": ["家园宠物鉴定10级技能概率增加", "获取家园卡增加兑换功能", "黑白钥匙起司任务取消职业限制", "失落的文明系列任务取消职业限制", "宠物回收皮肤增加", "宠物丢地消失时间更改为24小时", "特殊仓库增加可存放物品"]},
         {"date": "2026-05-19", "items": ["任务狮鹫兽捕捉修改", "神兽传送掉落率提高", "树精神兽双王增加佣兵之证掉落", "每日任务找寻物品调整", "特殊仓库增加可存储物品", "流星山丘黄金树精任务取消职业限制", "任务凤凰的羽毛修改"]},
@@ -146,7 +190,13 @@ def get_fallback_data():
         {"date": "2026-06-17", "items": ["开启端午节活动", "杂货商店上架道具磁石定位仪", "无尽神器增加查看已献祭道具列表功能"]},
         {"date": "2026-06-23", "items": ["修复茱萸木采集无效", "人物宠物佣兵物理输出技能伤害提高至30%", "功能NPC道具管理增加回收砸蛋称号", "竞技场10连新增4把武器掉落", "神兽武器新增弓杖回力小刀", "关闭端午礼包限购NPC"]},
         {"date": "2026-06-27", "items": ["奥义技能支持守护神职业学习", "增加奥义技能必须要转生才可以学习", "树精长老神兽双王传送凭证掉率增加5%", "取消阿尔戈斯任务2贝亚掉落魔族之角", "法兰竞技场10连和砸蛋活动增加低概率获取魔族之角", "进阶区域任务勇闯恶魔城获得宠物蛋几率调整", "武器神兽小刀增加精神属性"]},
-        {"date": "2026-07-02", "items": ["修复\"战神铠甲\"物品栏中重叠消失的问题", "修复宠物\"暗黑僧侣\"无法捕捉的问题", "魔珠系列任务调整,取消两个步骤的物品需求", "裂空挑战合成NPC移动到法兰城\"裂空守护者\"旁边位置", "进阶区域\"豆芽商店\"中的道具\"职业存储(绑)\"价格由188降低为88豆芽币", "宝石装饰系统增加2次确认窗口,防止误触", "道具\"荣誉勋章\"耐久提高至100点", "兰国8道具\"豪华的头巾\"\"缓慢的小刀\"\"超级内裤\"耐久提高至10点", "兰国4道具\"祈祷的围巾\"取消兑换次数限制", "进阶区域\"豆芽商店\"中增加道具\"特殊仓库扩展[绑]\""]},
+        {"date": "2026-07-02", "items": ["修复战神铠甲物品栏中重叠消失的问题", "修复宠物暗黑僧侣无法捕捉的问题", "魔珠系列任务调整取消两个步骤的物品需求", "裂空挑战合成NPC移动到法兰城裂空守护者旁边位置", "进阶区域豆芽商店中的道具职业存储绑价格由188降低为88豆芽币", "宝石装饰系统增加2次确认窗口防止误触", "道具荣誉勋章耐久提高至100点", "兰国8道具豪华的头巾缓慢的小刀超级内裤耐久提高至10点", "兰国4道具祈祷的围巾取消兑换次数限制", "进阶区域豆芽商店中增加道具特殊仓库扩展绑"]},
+        {"date": "2026-07-10", "items": ["秘藏地图禁止放宠物", "新增功能自动加点和加点模拟器在人物明细页面中点击加点设置", "击败神兽后的巫师静谧之间更改为不限制职业进入", "道具寄售摆摊上限由20格增加至30格下次更新增加为40格", "道具摆摊创建续费费用由500G增加至1WG道具寄售费用由10G增加至1000G", "进阶区域3转时找人物转生NPC对话即可获得道具青铜令牌", "巅峰竞技场重制从进阶区域找NPC对话进入需求道具青铜令牌", "巅峰竞技场可以使用特殊仓库掉落的材料可以存放特殊仓库掉落的材料均不可交易", "巅峰竞技场增加NPC装备进阶", "道具祝福宝石增加装备耐久时当前耐久同步增加", "更改宝石石榴石对首饰进行装饰时增加的耐久详细数值自行在NPC处鉴定查看"]},
+        {"date": "2026-07-15", "items": ["打包箱子的叠加数量由10改为1000", "道具市场上架道具价格更改为单价可以按数量购买复数商品请重新定价上架", "道具市场魔币储蓄上限由10万更改为100万", "道具寄售上架费用由1000G降低为500G", "转生证明2/3/4/5掉落几率由10%增加至35%道具更改为不可交易丢地消失", "谜之迷宫固定刷新至坐标682.150", "特殊仓库添加部分物品", "亚留特村任务海贼的洞穴修复采集部分问题", "巅峰竞技场削弱强度"]},
+        {"date": "2026-07-17", "items": ["修复巅峰竞技场蛮荒王者战挂端的问题", "削弱巅峰竞技场强度", "提高奥义技能掉落几率", "巅峰竞技场地图中不掉装备耐久"]},
+        {"date": "2026-07-26", "items": ["每日签到聚魔香可以在NPC道具管理合成叠加道具", "道具无尽塔钥匙和道场挑战书取消限时", "道具无尽塔钥匙和道场挑战书更改为可叠加", "每日签到增加随机典藏卡奖励", "童话王国伊利村寻找失踪的作家任务更改为可以重复完成"]},
+        {"date": "2026-08-01", "items": ["宠物家园取消寿命限制", "竞技场连战逆袭的牛鬼取消掉落鬼吻鲑的BOSS", "佣兵管理NPC增加佣兵宠物重置点数功能", "宠物家园宠物鉴定费用由8W降低为2W", "童话王国沉睡村沉睡村的杀人事件侦探帽更改为固定属性已做完该任务的玩家可以找管理员重新重置该任务", "挑战黄金十二宫预热将会在下次更新正式开放具体玩法内容已在网站公布", "原道具青铜令牌更改图档更改名称为巅峰令牌", "巅峰竞技场BOSS继续削弱10%属性"]},
+        {"date": "2026-08-11", "items": ["道具雅典娜权杖更改为可叠加上限100", "开放黄金十二宫挑战", "大幅度降低无尽挑战需要的费用取消挑战+1选项增加挑战层数+500选项", "新手料理更改为10级料理", "功能变身消耗积分由35降低至5冷却时间由6小时增加至12小时", "任务童话王国阿里巴巴四十大盗中大盗之歌道具增加ABC标识方便更快通过任务", "法兰城竞技场地狱连战增加道具雅典娜权杖掉落", "法兰城竞技场噩梦连战雅典娜权杖掉落几率增加", "功能赛季限购增加弓手佣兵礼包格斗佣兵礼包", "魔币称号加成效果提高详见网站称号加成介绍", "增加称号雅典娜的守护者详见网站称号加成介绍", "极系列称号添加至巅峰竞技场各级别王者挑战掉落详见网站称号加成介绍", "新手宠物更改为黄蜂形象种族调整为昆虫系其他不变", "佣兵品阶从A品阶开始每品阶增加5%减伤最高品阶时减伤40%"]},
     ]
 
 def calculate_intervals(updates):
@@ -164,11 +214,11 @@ def generate_html(updates):
     """生成最终的 HTML 文件"""
     updates = calculate_intervals(updates)
     
-    # 读取 Git commit hash（GitHub Actions 会自动注入 GITHUB_SHA）
+    # 读取 Git commit hash
     git_sha = os.environ.get("GITHUB_SHA", "")
     version = f"{git_sha[:7]}" if git_sha else "local"
     
-    # 准备图表数据 - X轴只显示目标日期
+    # 准备图表数据
     chart_labels = []
     chart_data = []
     chart_colors = []
@@ -197,7 +247,14 @@ def generate_html(updates):
     min_interval = min(intervals_only) if intervals_only else 0
     max_interval = max(intervals_only) if intervals_only else 0
     
-    # 生成明细列表HTML - 倒序排列（最新在前），带data-idx正确对应数据
+    # 生成分类标签颜色映射
+    tag_colors = {
+        "BUG修复": "#c53030",
+        "新内容": "#059669",
+        "优化": "#2563eb"
+    }
+    
+    # 生成明细列表HTML - 倒序排列，带分类标签
     list_html = ""
     
     today_str = today.strftime("%Y-%m-%d")
@@ -217,9 +274,19 @@ def generate_html(updates):
         summary = u["items"][0][:20] + "..." if len(u["items"][0]) > 20 else u["items"][0]
         if len(u["items"]) > 1:
             summary += f" 等{len(u['items'])}条"
+        
+        # 生成分类标签HTML
+        tag_str = classify_date(u["items"])
+        tag_html = ""
+        for t in tag_str.split("/"):
+            color = tag_colors.get(t, "#666")
+            tag_html += f'<span class="update-tag" style="background:{color}15;color:{color};">{t}</span>'
+        
         list_html += f'''
             <div class="update-item" data-idx="{i}">
-                <span class="update-date">{u["date"]}</span>
+                <span class="update-date">{u["date"]}
+                    <span class="update-tags">{tag_html}</span>
+                </span>
                 <span class="update-content summary">{summary}</span>
                 <span class="update-interval">{interval_str}</span>
             </div>'''
@@ -330,7 +397,7 @@ def generate_html(updates):
         }}
         .update-item {{
             display: grid;
-            grid-template-columns: 90px 1fr 55px;
+            grid-template-columns: 110px 1fr 55px;
             align-items: center;
             padding: 7px 10px;
             border-bottom: 1px solid #f0f0f0;
@@ -350,7 +417,16 @@ def generate_html(updates):
             cursor: default;
         }}
         .update-item.now-item:hover {{ background: #fff8f8; }}
-        .update-date {{ font-weight: 600; color: #2c3e50; font-size: 13px; }}
+        .update-date {{ font-weight: 600; color: #2c3e50; font-size: 13px; display: flex; flex-direction: column; gap: 2px; }}
+        .update-tags {{ display: flex; flex-wrap: wrap; gap: 3px; }}
+        .update-tag {{
+            font-size: 10px;
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-weight: 500;
+            line-height: 1.2;
+            white-space: nowrap;
+        }}
         .update-content.summary {{
             color: #888;
             font-size: 12px;
@@ -494,11 +570,9 @@ def generate_html(updates):
         const chartData = {chart_data_json};
         const chartColors = {chart_colors_json};
         const chartSizes = {chart_sizes_json};
-        // 中国时区 (UTC+8)
         const CN_OFFSET = 8 * 60 * 60 * 1000;
 
         function getCNDate(date) {{
-            // 转换为北京时间 (UTC+8)
             const utc = date.getTime() + date.getTimezoneOffset() * 60 * 1000;
             return new Date(utc + CN_OFFSET);
         }}
@@ -524,7 +598,6 @@ def generate_html(updates):
             document.getElementById("todayDisplay").textContent = formatDate(now);
             const daysSince = getDaysDiff(lastUpdateDate, now);
             document.getElementById("daysSinceUpdate").textContent = daysSince + " 天";
-            // 同步更新明细列表顶部的"今天"条目
             const listDate = document.getElementById("todayListDate");
             if (listDate) {{
                 const m = String(now.getMonth() + 1).padStart(2, "0");
@@ -538,7 +611,6 @@ def generate_html(updates):
         updateToday();
         setInterval(updateToday, 60000);
 
-        // 渲染更新详情 - 通过data-idx正确对应数据（不受倒序影响）
         document.querySelectorAll('.update-item[data-idx]').forEach(item => {{
             const idx = parseInt(item.dataset.idx);
             const data = updates[idx];
@@ -558,7 +630,6 @@ def generate_html(updates):
             detailDiv.appendChild(ol);
             item.appendChild(detailDiv);
             
-            // 箭头放在内容列
             const contentSpan = item.querySelector(".update-content");
             contentSpan.innerHTML += ' <span class="arrow" style="color:#667eea;font-size:10px;">▼</span>';
             
@@ -569,7 +640,6 @@ def generate_html(updates):
             }});
         }});
 
-        // 绘制折线图
         const ctx = document.getElementById("intervalChart").getContext("2d");
         const gradient = ctx.createLinearGradient(0, 0, 0, 400);
         gradient.addColorStop(0, "rgba(102, 126, 234, 0.2)");
@@ -677,7 +747,6 @@ def main():
     
     updates = None
     
-    # 方法1: 从页面提取book_id和doc_id，然后调用API获取Lake格式内容
     print("[方法1] 尝试从语雀API获取...")
     html = fetch_yuque_page()
     if html:
@@ -690,20 +759,16 @@ def main():
         else:
             print("[警告] 无法从页面提取book_id和doc_id")
     
-    # 方法2: 尝试从HTML直接提取（备用）
     if not updates and html:
         print("[方法2] 尝试从HTML直接提取...")
         updates = extract_dates_from_html(html)
     
-    # 方法3: 使用本地兜底数据
     if not updates:
         print("[警告] 所有抓取方法均失败，使用本地兜底数据")
         updates = get_fallback_data()
     else:
         print(f"[成功] 抓取到 {len(updates)} 条更新记录")
-        # 更新兜底数据（可选：将新数据保存到文件）
     
-    # 生成网页
     generate_html(updates)
     print("[完成] 处理完毕！")
 
