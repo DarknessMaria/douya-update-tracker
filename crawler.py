@@ -108,8 +108,11 @@ def classify_item(text):
         tags.append("优化")
     return tags
 
-def classify_date(items):
+def classify_date(items, is_season=False):
     """日期级别分类，返回标签字符串"""
+    if is_season:
+        return "新赛季"
+    
     all_tags = []
     for item in items:
         all_tags.extend(classify_item(item))
@@ -137,9 +140,14 @@ def extract_dates_from_lake(content):
     updates = []
     try:
         # 修复：只匹配红色日期标题（#DF2A3F），避免条目内的蓝色<strong>被误截断
+        # 同时匹配特殊赛季标题：如 "2026-09 赛季版本内容更新"
         positions = []
-        for m in re.finditer(r'<strong>[^<]*<span[^>]*color:\s*#DF2A3F[^>]*>(\d{4}-\d{2}-\d{2})</span>[^<]*</strong>', content):
-            positions.append((m.start(), m.group(1)))
+        for m in re.finditer(r'<strong>[^<]*<span[^>]*color:\s*#DF2A3F[^>]*>(\d{4}-\d{2}(?:-\d{2})?)\s*(?:赛季版本内容更新)?</span>[^<]*</strong>', content):
+            raw_title = m.group(1)
+            is_season = "赛季" in m.group(0)
+            # 赛季标题映射为固定日期 2026-09-12
+            date_str = "2026-09-12" if is_season else raw_title
+            positions.append((m.start(), date_str, is_season))
         
         for i in range(len(positions)):
             start_pos = positions[i][0]
@@ -147,15 +155,28 @@ def extract_dates_from_lake(content):
             section = content[start_pos:end_pos]
             
             date_str = positions[i][1]
+            is_season = positions[i][2]
             items = re.findall(r'\d+、([^<]+)', section)
             items = [i.strip() for i in items if i.strip()]
             items = [i.replace("&quot;", '"').replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">") for i in items]
             if items:
-                updates.append({"date": date_str, "items": items})
+                record = {"date": date_str, "items": items}
+                if is_season:
+                    record["is_season"] = True
+                updates.append(record)
         
-        updates.sort(key=lambda x: x["date"])
-        print(f"[调试] Lake格式提取到 {len(updates)} 条记录")
-        return updates
+        # 去重：同一天可能出现多次（如赛季标题 + 正式日期）
+        seen = set()
+        unique_updates = []
+        for u in updates:
+            key = u["date"]
+            if key not in seen:
+                seen.add(key)
+                unique_updates.append(u)
+        
+        unique_updates.sort(key=lambda x: x["date"])
+        print(f"[调试] Lake格式提取到 {len(unique_updates)} 条记录")
+        return unique_updates
     except Exception as e:
         print(f"[警告] Lake格式解析失败: {e}")
         return None
@@ -197,6 +218,10 @@ def get_fallback_data():
         {"date": "2026-07-26", "items": ["每日签到聚魔香可以在NPC道具管理合成叠加道具", "道具无尽塔钥匙和道场挑战书取消限时", "道具无尽塔钥匙和道场挑战书更改为可叠加", "每日签到增加随机典藏卡奖励", "童话王国伊利村寻找失踪的作家任务更改为可以重复完成"]},
         {"date": "2026-08-01", "items": ["宠物家园取消寿命限制", "竞技场连战逆袭的牛鬼取消掉落鬼吻鲑的BOSS", "佣兵管理NPC增加佣兵宠物重置点数功能", "宠物家园宠物鉴定费用由8W降低为2W", "童话王国沉睡村沉睡村的杀人事件侦探帽更改为固定属性已做完该任务的玩家可以找管理员重新重置该任务", "挑战黄金十二宫预热将会在下次更新正式开放具体玩法内容已在网站公布", "原道具青铜令牌更改图档更改名称为巅峰令牌", "巅峰竞技场BOSS继续削弱10%属性"]},
         {"date": "2026-08-11", "items": ["道具雅典娜权杖更改为可叠加上限100", "开放黄金十二宫挑战", "大幅度降低无尽挑战需要的费用取消挑战+1选项增加挑战层数+500选项", "新手料理更改为10级料理", "功能变身消耗积分由35降低至5冷却时间由6小时增加至12小时", "任务童话王国阿里巴巴四十大盗中大盗之歌道具增加ABC标识方便更快通过任务", "法兰城竞技场地狱连战增加道具雅典娜权杖掉落", "法兰城竞技场噩梦连战雅典娜权杖掉落几率增加", "功能赛季限购增加弓手佣兵礼包格斗佣兵礼包", "魔币称号加成效果提高详见网站称号加成介绍", "增加称号雅典娜的守护者详见网站称号加成介绍", "极系列称号添加至巅峰竞技场各级别王者挑战掉落详见网站称号加成介绍", "新手宠物更改为黄蜂形象种族调整为昆虫系其他不变", "佣兵品阶从A品阶开始每品阶增加5%减伤最高品阶时减伤40%"]},
+        {"date": "2026-09-01", "items": ["修复称号忘川渡魂者", "巅峰竞技场大部分BOSS取消双动", "比卡丘宠物蛋签到由每月25天获得修改为10天获得"]},
+        {"date": "2026-09-12", "items": ["装备魔攻突破500加成重新设计", "传承武道统御者生命成长和攻击成长增加", "传承元素操控者生命成长和魔攻成长增加", "取消守护神职业", "宠物洗档卷由260次洗档满档保底降低至150次洗档即可满档保底", "恢复等级锁玩法初始60级每天自动解锁2级上限", "取消赛季限购传承佣兵直接上架至道具商城", "增加每日限购和每周限购礼包NPC赛季限购更名为道具限购", "新手福袋65级和85级各增加特殊仓库扩展卷*1", "世界BOSS神兽碎片不再分区四神兽碎片道具统一为神兽之魂碎片", "新手福袋85级取消减伤药剂增加随机佣兵箱*5豆芽币*100", "迷宫灵堂深绿2转迷宫迷宫宝箱数量增加详见网站游戏指南", "家园宠物更名为家园助手部分说明细节更改宠物不再直接鉴定为家园宠物变更为兑换为助手形象不再单一"], "is_season": True},
+        {"date": "2026-09-13", "items": ["泡点商店增加道具灵气丹100", "精品商店上架道具突破丹", "新手福袋85级中的家园扩展卡3修改至65级福袋中获得", "每日限购礼包中突破丹更改为灵气丹开启每周突破礼包", "装备魔攻突破500加成重新设计", "传承武道统御者生命成长和攻击成长增加", "传承元素操控者生命成长和魔攻成长增加", "取消守护神职业", "宠物洗档卷由260次洗档满档保底降低至150次洗档即可满档保底", "恢复等级锁玩法初始60级每天自动解锁2级上限", "取消赛季限购传承佣兵直接上架至道具商城", "增加每日限购和每周限购礼包NPC赛季限购更名为道具限购", "新手福袋65级和85级各增加特殊仓库扩展卷*1", "世界BOSS神兽碎片不再分区四神兽碎片道具统一为神兽之魂碎片", "新手福袋85级取消减伤药剂增加随机佣兵箱*5豆芽币*100", "迷宫灵堂深绿2转迷宫迷宫宝箱数量增加详见网站游戏指南", "家园宠物更名为家园助手部分说明细节更改宠物不再直接鉴定为家园宠物变更为兑换为助手形象不再单一", "待添加"]},
+        {"date": "2026-09-14", "items": ["修复随机典藏卡在背包已满的情况下仍然可以使用的问题", "修复皮卡丘宠物蛋签到由每月25天获得修改为10天获得", "渡劫修仙战斗后随机获取的灵气值修改为每提升一个小境界获取值翻倍", "道具灵气丹100更名为灵气丹下品", "传承佣兵增加EXBUFF详情见网站", "渡劫修仙与敌方怪物平均等级差5级获得灵气值修改至等级差10级也可以获取灵气值详情见网站介绍已更新"]},
     ]
 
 def calculate_intervals(updates):
@@ -228,7 +253,10 @@ def generate_html(updates):
         curr = updates[i]["date"][5:]
         chart_labels.append(curr)
         chart_data.append(updates[i]["interval"])
-        chart_colors.append("#667eea")
+        if updates[i].get("is_season"):
+            chart_colors.append("#f59e0b")
+        else:
+            chart_colors.append("#667eea")
         chart_sizes.append(6)
     
     # 最后一个数据点：到今天的间隔
@@ -251,7 +279,8 @@ def generate_html(updates):
     tag_colors = {
         "BUG修复": "#c53030",
         "新内容": "#059669",
-        "优化": "#2563eb"
+        "优化": "#2563eb",
+        "新赛季": "#d97706"
     }
     
     # 生成明细列表HTML - 倒序排列，带分类标签
@@ -267,6 +296,8 @@ def generate_html(updates):
     
     for i in range(len(updates) - 1, -1, -1):
         u = updates[i]
+        is_season = u.get("is_season", False)
+        
         if i == 0:
             interval_str = '<span style="color:#999;">首次</span>'
         else:
@@ -276,14 +307,17 @@ def generate_html(updates):
             summary += f" 等{len(u['items'])}条"
         
         # 生成分类标签HTML
-        tag_str = classify_date(u["items"])
+        tag_str = classify_date(u["items"], is_season)
         tag_html = ""
         for t in tag_str.split("/"):
             color = tag_colors.get(t, "#666")
             tag_html += f'<span class="update-tag" style="background:{color}15;color:{color};">{t}</span>'
         
+        # 赛季记录特殊样式
+        item_class = "update-item season-item" if is_season else "update-item"
+        
         list_html += f'''
-            <div class="update-item" data-idx="{i}">
+            <div class="{item_class}" data-idx="{i}">
                 <span class="update-date">{u["date"]}
                     <span class="update-tags">{tag_html}</span>
                 </span>
@@ -417,6 +451,12 @@ def generate_html(updates):
             cursor: default;
         }}
         .update-item.now-item:hover {{ background: #fff8f8; }}
+        .update-item.season-item {{
+            background: linear-gradient(90deg, #fffbeb 0%, #fff 100%);
+            border-left: 3px solid #f59e0b;
+            border-bottom: 1px solid #fde68a;
+        }}
+        .update-item.season-item:hover {{ background: linear-gradient(90deg, #fef3c7 0%, #fff 100%); }}
         .update-date {{ font-weight: 600; color: #2c3e50; font-size: 13px; display: flex; flex-direction: column; gap: 2px; }}
         .update-tags {{ display: flex; flex-wrap: wrap; gap: 3px; }}
         .update-tag {{
