@@ -1,6 +1,6 @@
 # 豆芽魔力 更新间隔统计 - 自动同步版
 
-自动抓取语雀维护更新记录，生成间隔天数折线图，每12小时同步一次。
+自动抓取语雀维护更新记录，生成间隔天数折线图，每4小时同步一次。
 
 ## 快速开始（推荐：全自动方案）
 
@@ -28,12 +28,13 @@
 ### 步骤3：启用 GitHub Pages
 
 1. 仓库 → Settings → Pages
-2. Source 选择 "GitHub Actions"
-3. 保存
+2. Source 选择 "Deploy from a branch"
+3. Branch 选择 `main`，文件夹选择 `/ (root)` 或 `/docs`
+4. 保存
 
 ### 步骤4：手动触发首次部署
 
-1. 仓库 → Actions → 找到 "自动同步语雀更新记录"
+1. 仓库 → Actions → 找到 "sync-and-deploy"
 2. 点击 "Run workflow" 手动运行一次
 3. 等待完成后，访问 `https://你的用户名.github.io/仓库名/`
 
@@ -61,8 +62,8 @@
 # 编辑 crontab
 crontab -e
 
-# 添加以下行（每天早上8点和晚上8点运行）
-0 8,20 * * * cd /path/to/douya-tracker && python3 crawler.py
+# 添加以下行（每4小时运行一次）
+0 0,4,8,12,16,20 * * * cd /path/to/douya-tracker && python3 crawler.py
 ```
 
 然后用任意 Web 服务器托管 `dist` 文件夹即可：
@@ -91,7 +92,9 @@ cd dist && python3 -m http.server 8080
 
 ## 特性
 
-- 每12小时自动抓取语雀最新更新
+- 每4小时自动抓取语雀最新更新
 - 实时计算距上次更新天数
 - 点击更新记录可展开查看详细内容
+- 更新内容自动分类：BUG修复 / 新内容 / 优化 / 新赛季
+- 赛季版本更新特殊金色标记
 - 响应式设计，支持手机访问
