@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 语雀更新记录爬虫 - 自动抓取最新更新数据并生成网页
+（触发构建 v2）
 """
 import re
 import json
@@ -302,9 +303,14 @@ def generate_html(updates):
             interval_str = '<span style="color:#999;">首次</span>'
         else:
             interval_str = f'<span class="days">{u["interval"]} 天</span>'
-        summary = u["items"][0][:20] + "..." if len(u["items"][0]) > 20 else u["items"][0]
-        if len(u["items"]) > 1:
-            summary += f" 等{len(u['items'])}条"
+        if is_season:
+            summary = "S2赛季开启 版本内容更新"
+            if len(u["items"]) > 1:
+                summary += f" 等{len(u['items'])}条"
+        else:
+            summary = u["items"][0][:20] + "..." if len(u["items"][0]) > 20 else u["items"][0]
+            if len(u["items"]) > 1:
+                summary += f" 等{len(u['items'])}条"
         
         # 生成分类标签HTML
         tag_str = classify_date(u["items"], is_season)
